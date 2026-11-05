@@ -1,6 +1,4 @@
 import copy
-import json
-import os
 import time
 from typing import Dict
 
@@ -11,6 +9,7 @@ from .agents import ActionAgent
 from .agents import CriticAgent
 from .agents import CurriculumAgent
 from .agents import SkillManager
+from .llm import DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL, DEFAULT_NUM_CTX
 
 
 # TODO: remove event memory
@@ -18,33 +17,38 @@ class Voyager:
     def __init__(
         self,
         mc_port: int = None,
+        mc_host: str = "localhost",
+        mc_username: str = "bot",
+        mc_version: str = "1.21.1",
         azure_login: Dict[str, str] = None,
         server_port: int = 3000,
-        openai_api_key: str = None,
+        ollama_base_url: str = DEFAULT_BASE_URL,
         env_wait_ticks: int = 20,
         env_request_timeout: int = 600,
         max_iterations: int = 160,
         reset_placed_if_failed: bool = False,
-        action_agent_model_name: str = "gpt-4",
+        action_agent_model_name: str = DEFAULT_CHAT_MODEL,
         action_agent_temperature: float = 0,
         action_agent_task_max_retries: int = 4,
         action_agent_show_chat_log: bool = True,
         action_agent_show_execution_error: bool = True,
-        curriculum_agent_model_name: str = "gpt-4",
+        curriculum_agent_model_name: str = DEFAULT_CHAT_MODEL,
         curriculum_agent_temperature: float = 0,
-        curriculum_agent_qa_model_name: str = "gpt-3.5-turbo",
+        curriculum_agent_qa_model_name: str = DEFAULT_CHAT_MODEL,
         curriculum_agent_qa_temperature: float = 0,
         curriculum_agent_warm_up: Dict[str, int] = None,
         curriculum_agent_core_inventory_items: str = r".*_log|.*_planks|stick|crafting_table|furnace"
         r"|cobblestone|dirt|coal|.*_pickaxe|.*_sword|.*_axe",
         curriculum_agent_mode: str = "auto",
-        critic_agent_model_name: str = "gpt-4",
+        critic_agent_model_name: str = DEFAULT_CHAT_MODEL,
         critic_agent_temperature: float = 0,
         critic_agent_mode: str = "auto",
-        skill_manager_model_name: str = "gpt-3.5-turbo",
+        skill_manager_model_name: str = DEFAULT_CHAT_MODEL,
         skill_manager_temperature: float = 0,
         skill_manager_retrieval_top_k: int = 5,
-        openai_api_request_timeout: int = 240,
+        ollama_embedding_model_name: str = DEFAULT_EMBEDDING_MODEL,
+        llm_num_ctx: int = DEFAULT_NUM_CTX,
+        llm_request_timeout: int = 240,
         ckpt_dir: str = "ckpt",
         skill_library_dir: str = None,
         resume: bool = False,
@@ -56,9 +60,12 @@ class Voyager:
         Critic agent is the self-verification in paper.
         Skill manager is the skill library in paper.
         :param mc_port: minecraft in-game port
+        :param mc_host: minecraft server host
+        :param mc_username: in-game name of the bot
+        :param mc_version: Minecraft version the protocol adapter must support
         :param azure_login: minecraft login config
         :param server_port: mineflayer port
-        :param openai_api_key: openai api key
+        :param ollama_base_url: base URL of the Ollama server
         :param env_wait_ticks: how many ticks at the end each step will wait, if you found some chat log missing,
         you should increase this value
         :param env_request_timeout: how many seconds to wait for each step, if the code execution exceeds this time,
@@ -95,7 +102,9 @@ class Voyager:
         :param skill_manager_model_name: skill manager model name
         :param skill_manager_temperature: skill manager temperature
         :param skill_manager_retrieval_top_k: how many skills to retrieve for each task
-        :param openai_api_request_timeout: how many seconds to wait for openai api
+        :param ollama_embedding_model_name: Ollama model used to embed skills and curriculum questions
+        :param llm_num_ctx: context length sent to Ollama. 8192 matches the window these prompts were written for
+        :param llm_request_timeout: how many seconds to wait for an Ollama response
         :param ckpt_dir: checkpoint dir
         :param skill_library_dir: skill library dir
         :param resume: whether to resume from checkpoint
@@ -103,6 +112,9 @@ class Voyager:
         # init env
         self.env = VoyagerEnv(
             mc_port=mc_port,
+            mc_host=mc_host,
+            mc_username=mc_username,
+            mc_version=mc_version,
             azure_login=azure_login,
             server_port=server_port,
             request_timeout=env_request_timeout,
@@ -111,18 +123,17 @@ class Voyager:
         self.reset_placed_if_failed = reset_placed_if_failed
         self.max_iterations = max_iterations
 
-        # set openai api key
-        os.environ["OPENAI_API_KEY"] = openai_api_key
-
         # init agents
         self.action_agent = ActionAgent(
             model_name=action_agent_model_name,
             temperature=action_agent_temperature,
-            request_timout=openai_api_request_timeout,
+            request_timout=llm_request_timeout,
             ckpt_dir=ckpt_dir,
             resume=resume,
             chat_log=action_agent_show_chat_log,
             execution_error=action_agent_show_execution_error,
+            base_url=ollama_base_url,
+            num_ctx=llm_num_ctx,
         )
         self.action_agent_task_max_retries = action_agent_task_max_retries
         self.curriculum_agent = CurriculumAgent(
@@ -130,26 +141,34 @@ class Voyager:
             temperature=curriculum_agent_temperature,
             qa_model_name=curriculum_agent_qa_model_name,
             qa_temperature=curriculum_agent_qa_temperature,
-            request_timout=openai_api_request_timeout,
+            request_timout=llm_request_timeout,
             ckpt_dir=ckpt_dir,
             resume=resume,
             mode=curriculum_agent_mode,
             warm_up=curriculum_agent_warm_up,
             core_inventory_items=curriculum_agent_core_inventory_items,
+            base_url=ollama_base_url,
+            num_ctx=llm_num_ctx,
+            embedding_model_name=ollama_embedding_model_name,
         )
         self.critic_agent = CriticAgent(
             model_name=critic_agent_model_name,
             temperature=critic_agent_temperature,
-            request_timout=openai_api_request_timeout,
+            request_timout=llm_request_timeout,
             mode=critic_agent_mode,
+            base_url=ollama_base_url,
+            num_ctx=llm_num_ctx,
         )
         self.skill_manager = SkillManager(
             model_name=skill_manager_model_name,
             temperature=skill_manager_temperature,
             retrieval_top_k=skill_manager_retrieval_top_k,
-            request_timout=openai_api_request_timeout,
+            request_timout=llm_request_timeout,
             ckpt_dir=skill_library_dir if skill_library_dir else ckpt_dir,
             resume=True if resume or skill_library_dir else False,
+            base_url=ollama_base_url,
+            num_ctx=llm_num_ctx,
+            embedding_model_name=ollama_embedding_model_name,
         )
         self.recorder = U.EventRecorder(ckpt_dir=ckpt_dir, resume=resume)
         self.resume = resume
