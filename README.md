@@ -38,7 +38,7 @@ solve novel tasks from scratch, while other techniques struggle to generalize.
 In this repo, we provide Voyager code. This codebase is under [MIT License](LICENSE).
 
 # Installation
-Voyager requires Python ≥ 3.9 and Node.js ≥ 16.13.0. We have tested on Ubuntu 20.04, Windows 11, and macOS. You need to follow the instructions below to install Voyager.
+Voyager requires Python ≥ 3.9 and Node.js ≥ 22. The NeoForge 1.21.1 bot is tested with Node.js 22.23.4. We have tested on Ubuntu 20.04, Windows 11, and macOS. You need to follow the instructions below to install Voyager.
 
 ## Python Install
 ```
@@ -59,17 +59,14 @@ cd ..
 npm install
 ```
 
-## Minecraft Instance Install
+## Minecraft server
 
-Voyager depends on Minecraft game. You need to install Minecraft game and set up a Minecraft instance.
+The supported game is a NeoForge 1.21.1 dedicated server. `make build` creates one image with the Python agent and the Node bot, and `make run` starts that image beside the server. Follow [NeoForge 1.21.1](installation/neoforge.md).
 
-Follow the instructions in [Minecraft Login Tutorial](installation/minecraft_instance_install.md) to set up your Minecraft Instance.
+The Fabric 1.19 client remains the previous path:
 
-## Fabric Mods Install
-
-You need to install fabric mods to support all the features in Voyager. Remember to use the correct Fabric version of all the mods. 
-
-Follow the instructions in [Fabric Mods Install](installation/fabric_mods_install.md) to install the mods.
+- [Minecraft Login Tutorial](installation/minecraft_instance_install.md)
+- [Fabric Mods Install](installation/fabric_mods_install.md)
 
 # Getting Started
 Voyager uses a local [Ollama](https://ollama.com/) server for chat and embeddings. Install Ollama, start it, and pull the default models:
@@ -81,6 +78,8 @@ ollama pull nomic-embed-text
 ```
 
 `qwen2.5-coder:7b` is the chat model for every agent. `nomic-embed-text` embeds the skill library and the curriculum question cache. The server defaults to `http://127.0.0.1:11434`. Pass `ollama_base_url`, an agent `*_model_name`, or `ollama_embedding_model_name` to use another server or model.
+
+The Docker path joins the NeoForge 1.21.1 server described in [NeoForge 1.21.1](installation/neoforge.md). `make run` uses that server. The Azure login example below is the previous Fabric client path.
 
 After the installation process, you can run Voyager by:
 ```python
