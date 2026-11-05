@@ -72,7 +72,15 @@ You need to install fabric mods to support all the features in Voyager. Remember
 Follow the instructions in [Fabric Mods Install](installation/fabric_mods_install.md) to install the mods.
 
 # Getting Started
-Voyager uses OpenAI's GPT-4 as the language model. You need to have an OpenAI API key to use Voyager. You can get one from [here](https://platform.openai.com/account/api-keys).
+Voyager uses a local [Ollama](https://ollama.com/) server for chat and embeddings. Install Ollama, start it, and pull the default models:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:7b
+ollama pull nomic-embed-text
+```
+
+`qwen2.5-coder:7b` is the chat model for every agent. `nomic-embed-text` embeds the skill library and the curriculum question cache. The server defaults to `http://127.0.0.1:11434`. Pass `ollama_base_url`, an agent `*_model_name`, or `ollama_embedding_model_name` to use another server or model.
 
 After the installation process, you can run Voyager by:
 ```python
@@ -85,11 +93,9 @@ azure_login = {
     "secret_value": "[OPTIONAL] YOUR_SECRET_VALUE",
     "version": "fabric-loader-0.14.18-1.19", # the version Voyager is tested on
 }
-openai_api_key = "YOUR_API_KEY"
 
 voyager = Voyager(
     azure_login=azure_login,
-    openai_api_key=openai_api_key,
 )
 
 # start lifelong learning
@@ -111,7 +117,6 @@ from voyager import Voyager
 
 voyager = Voyager(
     azure_login=azure_login,
-    openai_api_key=openai_api_key,
     ckpt_dir="YOUR_CKPT_DIR",
     resume=True,
 )
@@ -124,9 +129,10 @@ If you want to run Voyager for a specific task with a learned skill library, you
 from voyager import Voyager
 
 # First instantiate Voyager with skill_library_dir.
+# The first open of a library embedded by another model rewrites that library's vectordb/
+# with nomic-embed-text. Ollama must be running and that embedding model must be pulled.
 voyager = Voyager(
     azure_login=azure_login,
-    openai_api_key=openai_api_key,
     skill_library_dir="./skill_library/trial1", # Load a learned skill library.
     ckpt_dir="YOUR_CKPT_DIR", # Feel free to use a new dir. Do not use the same dir as skill library because new events will still be recorded to ckpt_dir. 
     resume=False, # Do not resume from a skill library because this is not learning.
