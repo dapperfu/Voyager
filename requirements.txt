@@ -10,3 +10,4 @@ setuptools
 gymnasium
 psutil
 minecraft_launcher_lib
+langchain-community==0.2.17
