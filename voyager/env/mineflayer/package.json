@@ -1,38 +1,31 @@
 {
     "name": "voyager",
     "version": "1.0.0",
-    "description": "",
+    "description": "Voyager Mineflayer bot for NeoForge 1.21.1",
     "main": "index.js",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "start": "node index.js"
     },
-    "keywords": [],
-    "author": "",
-    "license": "ISC",
+    "engines": {
+        "node": ">=22"
+    },
+    "license": "MIT",
     "dependencies": {
-        "body-parser": "^1.20.2",
-        "express": "^4.18.2",
-        "magic-string": "^0.30.0",
-        "minecraft-data": "^3.31.0",
-        "minecrafthawkeye": "^1.3.6",
-        "mineflayer": "^4.8.1",
+        "body-parser": "1.20.9",
+        "express": "4.22.3",
+        "minecraft-data": "3.119.0",
+        "minecraft-protocol-forge": "https://codeload.github.com/Pix3lPirat3/node-minecraft-protocol-forge/tar.gz/af4dcd8fca4c3c0ba69b8665a8c41c40ff72e6c1",
+        "minecrafthawkeye": "1.3.9",
+        "mineflayer": "4.39.0",
         "mineflayer-collectblock": "file:mineflayer-collectblock",
-        "mineflayer-pathfinder": "^2.4.2",
-        "mineflayer-pvp": "^1.3.2",
-        "mineflayer-tool": "^1.2.0",
-        "mocha": "^10.2.0",
-        "prismarine-biome": "^1.3.0",
-        "prismarine-block": "=1.16.3",
-        "prismarine-entity": "^2.2.0",
-        "prismarine-item": "^1.12.1",
-        "prismarine-nbt": "^2.2.1",
-        "prismarine-recipe": "^1.3.1",
-        "prismarine-viewer": "^1.24.0",
-        "typescript": "^4.9.5",
-        "vec3": "^0.1.8",
-        "graceful-fs": "^4.2.11"
+        "mineflayer-pathfinder": "2.4.5",
+        "mineflayer-pvp": "1.3.2",
+        "mineflayer-tool": "1.2.0",
+        "protodef": "1.19.0",
+        "vec3": "0.1.10"
     },
     "devDependencies": {
-        "prettier": "2.8.5"
+        "prettier": "2.8.5",
+        "typescript": "5.9.3"
     }
 }
