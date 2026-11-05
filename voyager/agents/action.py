@@ -1,7 +1,22 @@
+import os
 import re
 import time
 
 import voyager.utils as U
+
+# The JS bridge resolves packages with Node's require(), which does not look in
+# the Mineflayer tree. Babel lives there so action code can be parsed.
+_mineflayer_modules = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "env", "mineflayer", "node_modules")
+)
+_node_path = os.environ.get("NODE_PATH", "")
+if _mineflayer_modules not in _node_path.split(os.pathsep):
+    os.environ["NODE_PATH"] = (
+        os.pathsep.join((_mineflayer_modules, _node_path))
+        if _node_path
+        else _mineflayer_modules
+    )
+
 from javascript import require
 from langchain.prompts import SystemMessagePromptTemplate
 from langchain.schema import AIMessage, HumanMessage, SystemMessage

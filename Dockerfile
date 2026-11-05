@@ -26,6 +26,7 @@ COPY --from=nodebuild /usr/local/bin/node /usr/local/bin/node
 COPY --from=pybuild --chown=voyager:voyager /opt/py /opt/py
 ENV PATH=/opt/py/bin:/usr/local/bin:/usr/bin:/bin
 ENV PYTHONPATH=/opt/py/lib/python3.11/site-packages:/app
+ENV NODE_PATH=/app/voyager/env/mineflayer/node_modules
 WORKDIR /app
 COPY --chown=voyager:voyager . .
 COPY --from=nodebuild --chown=voyager:voyager /app/node_modules /app/voyager/env/mineflayer/node_modules
