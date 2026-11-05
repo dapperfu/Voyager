@@ -12,6 +12,29 @@ from .agents import CurriculumAgent
 from .agents import SkillManager
 from .llm import DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL, DEFAULT_NUM_CTX
 
+WOOD_LOGS = (
+    "oak_log",
+    "birch_log",
+    "spruce_log",
+    "jungle_log",
+    "acacia_log",
+    "dark_oak_log",
+    "mangrove_log",
+    "cherry_log",
+)
+
+
+def _wood_log_count(events) -> int:
+    if not events:
+        return 0
+    inventory = events[-1][1].get("inventory") or {}
+    total = 0
+    for name in WOOD_LOGS:
+        count = inventory.get(name, 0)
+        if isinstance(count, int):
+            total += count
+    return total
+
 
 # TODO: remove event memory
 class Voyager:
@@ -397,7 +420,15 @@ class Voyager:
             )
         return self.curriculum_agent.decompose_task(task, self.last_events)
 
-    def inference(self, task=None, sub_goals=[], reset_mode="hard", reset_env=True):
+    def inference(
+        self,
+        task=None,
+        sub_goals=[],
+        reset_mode="hard",
+        reset_env=True,
+        context="",
+        repeat_last=False,
+    ):
         if not task and not sub_goals:
             raise ValueError("Either task or sub_goals must be provided")
         if not sub_goals:
@@ -411,15 +442,22 @@ class Voyager:
         self.curriculum_agent.completed_tasks = []
         self.curriculum_agent.failed_tasks = []
         self.last_events = self.env.step("")
-        while self.curriculum_agent.progress < len(sub_goals):
-            next_task = sub_goals[self.curriculum_agent.progress]
-            context = self.curriculum_agent.get_task_context(next_task)
+        while True:
+            progress = self.curriculum_agent.progress
+            if progress < len(sub_goals):
+                next_task = sub_goals[progress]
+            elif repeat_last:
+                held = _wood_log_count(self.last_events)
+                next_task = f"Mine {held + 1} logs of any wood type"
+            else:
+                break
+            task_context = context or self.curriculum_agent.get_task_context(next_task)
             print(
                 f"\033[35mStarting task {next_task} for at most {self.action_agent_task_max_retries} times\033[0m"
             )
             messages, reward, done, info = self.rollout(
                 task=next_task,
-                context=context,
+                context=task_context,
                 reset_env=reset_env,
             )
             self.curriculum_agent.update_exploration_progress(info)

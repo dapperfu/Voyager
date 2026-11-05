@@ -30,6 +30,21 @@ def _env(name, default=""):
     return os.environ.get(name, default).strip()
 
 
+def _subgoals():
+    raw = _env("SUBGOALS")
+    if not raw:
+        return []
+    try:
+        goals = json.loads(raw)
+    except json.JSONDecodeError:
+        raise SystemExit("SUBGOALS must be a JSON list of strings")
+    if not isinstance(goals, list) or any(
+        not isinstance(goal, str) or not goal.strip() for goal in goals
+    ):
+        raise SystemExit("SUBGOALS must be a JSON list of strings")
+    return [goal.strip() for goal in goals]
+
+
 def _connection():
     return {
         "mc_port": _port("MC_PORT", "25565"),
@@ -107,7 +122,13 @@ def learn():
                         "wait_ticks": agent.env_wait_ticks,
                     }
                 )
-            agent.inference(task=task, reset_mode=reset_mode)
+            agent.inference(
+                task=task,
+                sub_goals=_subgoals(),
+                reset_mode=reset_mode,
+                context=_env("TASK_CONTEXT"),
+                repeat_last=_flag("REPEAT_LAST"),
+            )
         else:
             agent.learn()
     finally:
