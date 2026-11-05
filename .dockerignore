@@ -1,0 +1,8 @@
+.git
+ckpt
+logs
+.env
+**/node_modules
+**/__pycache__
+**/*.pyc
+voyager/env/mineflayer/mineflayer-collectblock/lib
