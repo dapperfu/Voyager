@@ -67,14 +67,15 @@ async function collectAll(
                             );
                             // @ts-ignore
                         } else if (err.name === "NoItem") {
+                            const blockName = closest.name ?? "that block";
                             const properties =
-                                bot.registry.blocksByName[closest.name];
-                            const leastTool = Object.keys(
-                                properties.harvestTools
-                            )[0];
+                                bot.registry.blocksByName[blockName];
+                            const leastTool = Number(
+                                Object.keys(properties?.harvestTools ?? {})[0]
+                            );
                             const item = bot.registry.items[leastTool];
                             bot.chat(
-                                `I need at least a ${item.name} to mine ${closest.name}!  Skip it!`
+                                `I need at least a ${item?.name ?? "better tool"} to mine ${blockName}!  Skip it!`
                             );
                             return;
                         } else if (
