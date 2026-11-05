@@ -1,5 +1,6 @@
 import copy
 import time
+import traceback
 from typing import Dict
 
 import voyager.utils as U
@@ -367,7 +368,7 @@ class Voyager:
                 )
                 # use red color background to print the error
                 print("Your last round rollout terminated due to error:")
-                print(f"\033[41m{e}\033[0m")
+                print(f"\033[41m{traceback.format_exc()}\033[0m")
 
             if info["success"]:
                 self.skill_manager.add_new_skill(info)
