@@ -1,0 +1,72 @@
+name: voyager-neoforge
+
+services:
+  minecraft:
+    image: itzg/minecraft-server:2026.10.1-java21
+    restart: unless-stopped
+    ports:
+      - "25566:25565"
+    environment:
+      EULA: "TRUE"
+      TYPE: NEOFORGE
+      VERSION: "1.21.1"
+      NEOFORGE_VERSION: "21.1.265"
+      INIT_MEMORY: "2G"
+      MAX_MEMORY: "4G"
+      MODE: survival
+      DIFFICULTY: peaceful
+      FORCE_GAMEMODE: "TRUE"
+      ONLINE_MODE: "FALSE"
+      ENFORCE_SECURE_PROFILE: "FALSE"
+      SPAWN_PROTECTION: "0"
+      PLAYER_IDLE_TIMEOUT: "0"
+      MAX_TICK_TIME: "-1"
+      OPS: bot
+      VIEW_DISTANCE: "10"
+      SIMULATION_DISTANCE: "8"
+      LEVEL_TYPE: "minecraft:normal"
+      SEED: "1211"
+      MOTD: "Voyager NeoForge 1.21.1"
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: ${RCON_PASSWORD:-voyager}
+      TZ: "America/Detroit"
+    volumes:
+      - voyager-world:/data
+    healthcheck:
+      test: ["CMD", "mc-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 40
+      start_period: 10m
+
+  voyager:
+    build: .
+    restart: "no"
+    depends_on:
+      minecraft:
+        condition: service_healthy
+    environment:
+      MC_HOST: minecraft
+      MC_PORT: "25565"
+      MC_VERSION: "1.21.1"
+      MC_USERNAME: bot
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      LLM_NUM_CTX: ${LLM_NUM_CTX:-8192}
+      LLM_REQUEST_TIMEOUT: ${LLM_REQUEST_TIMEOUT:-240}
+      SMOKE: ${SMOKE:-}
+      CKPT_DIR: ckpt
+      RESUME: ${RESUME:-}
+      ACTION_AGENT_MODEL: ${ACTION_AGENT_MODEL:-qwen2.5-coder:7b}
+      CURRICULUM_AGENT_MODEL: ${CURRICULUM_AGENT_MODEL:-qwen2.5-coder:7b}
+      CURRICULUM_QA_MODEL: ${CURRICULUM_QA_MODEL:-qwen2.5-coder:7b}
+      CRITIC_AGENT_MODEL: ${CRITIC_AGENT_MODEL:-qwen2.5-coder:7b}
+      SKILL_MANAGER_MODEL: ${SKILL_MANAGER_MODEL:-qwen2.5-coder:7b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ckpt:/app/ckpt
+      - ./logs:/app/logs
+
+volumes:
+  voyager-world:

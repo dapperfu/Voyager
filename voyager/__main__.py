@@ -3,6 +3,12 @@ import os
 
 from voyager import Voyager
 from voyager.env import VoyagerEnv
+from voyager.llm import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_NUM_CTX,
+)
 
 
 def _flag(name):
@@ -54,25 +60,31 @@ def smoke():
 
 
 def learn():
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise SystemExit("OPENAI_API_KEY is required")
     agent = Voyager(
         **_connection(),
-        openai_api_key=key,
+        ollama_base_url=os.environ.get("OLLAMA_BASE_URL", DEFAULT_BASE_URL),
+        ollama_embedding_model_name=os.environ.get(
+            "OLLAMA_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
+        ),
+        llm_num_ctx=int(os.environ.get("LLM_NUM_CTX", str(DEFAULT_NUM_CTX))),
+        llm_request_timeout=int(os.environ.get("LLM_REQUEST_TIMEOUT", "240")),
         ckpt_dir=os.environ.get("CKPT_DIR", "ckpt"),
         resume=_flag("RESUME"),
         env_wait_ticks=int(os.environ.get("ENV_WAIT_TICKS", "20")),
-        action_agent_model_name=os.environ.get("ACTION_AGENT_MODEL", "gpt-4"),
+        action_agent_model_name=os.environ.get(
+            "ACTION_AGENT_MODEL", DEFAULT_CHAT_MODEL
+        ),
         curriculum_agent_model_name=os.environ.get(
-            "CURRICULUM_AGENT_MODEL", "gpt-4"
+            "CURRICULUM_AGENT_MODEL", DEFAULT_CHAT_MODEL
         ),
         curriculum_agent_qa_model_name=os.environ.get(
-            "CURRICULUM_QA_MODEL", "gpt-3.5-turbo"
+            "CURRICULUM_QA_MODEL", DEFAULT_CHAT_MODEL
         ),
-        critic_agent_model_name=os.environ.get("CRITIC_AGENT_MODEL", "gpt-4"),
+        critic_agent_model_name=os.environ.get(
+            "CRITIC_AGENT_MODEL", DEFAULT_CHAT_MODEL
+        ),
         skill_manager_model_name=os.environ.get(
-            "SKILL_MANAGER_MODEL", "gpt-3.5-turbo"
+            "SKILL_MANAGER_MODEL", DEFAULT_CHAT_MODEL
         ),
     )
     try:
