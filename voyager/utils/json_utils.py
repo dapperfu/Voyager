@@ -141,12 +141,34 @@ def correct_json(json_str: str) -> str:
     return json_str
 
 
+def _strip_json_fences(json_str: str) -> str:
+    text = json_str.replace("\t", "").strip()
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    if fenced:
+        return fenced.group(1).strip()
+    return text
+
+
+def _extract_json_payload(json_str: str) -> str:
+    object_start = json_str.find("{")
+    array_start = json_str.find("[")
+    starts = [index for index in (object_start, array_start) if index >= 0]
+    if not starts:
+        return json_str
+    start = min(starts)
+    closer = "}" if json_str[start] == "{" else "]"
+    end = json_str.rfind(closer)
+    if end < start:
+        return json_str
+    return json_str[start : end + 1]
+
+
 def fix_and_parse_json(
     json_str: str, try_to_fix_with_gpt: bool = True
 ) -> Union[str, Dict[Any, Any]]:
     """Fix and parse JSON string"""
+    json_str = _strip_json_fences(json_str)
     try:
-        json_str = json_str.replace("\t", "")
         return json.loads(json_str)
     except json.JSONDecodeError as _:  # noqa: F841
         json_str = correct_json(json_str)
@@ -162,10 +184,7 @@ def fix_and_parse_json(
     # So let's try to find the first brace and then parse the rest
     #  of the string
     try:
-        brace_index = json_str.index("{")
-        json_str = json_str[brace_index:]
-        last_brace_index = json_str.rindex("}")
-        json_str = json_str[: last_brace_index + 1]
+        json_str = _extract_json_payload(json_str)
         return json.loads(json_str)
     except json.JSONDecodeError as e:  # noqa: F841
         # if try_to_fix_with_gpt:

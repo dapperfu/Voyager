@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import random
 import re
+import shutil
 
 import voyager.utils as U
 from voyager.prompts import load_prompt
@@ -71,6 +73,7 @@ class CurriculumAgent:
             self.completed_tasks = []
             self.failed_tasks = []
             self.qa_cache = {}
+            shutil.rmtree(f"{ckpt_dir}/curriculum/vectordb", ignore_errors=True)
         # vectordb for qa cache
         vectordb_dir = f"{ckpt_dir}/curriculum/vectordb"
         marker_path = f"{ckpt_dir}/curriculum/embedding.json"
@@ -359,6 +362,13 @@ class CurriculumAgent:
         return {"next_task": task}
 
     def propose_next_manual_task(self):
+        task = os.environ.get("TASK", "").strip()
+        context = os.environ.get("TASK_CONTEXT", "").strip()
+        if task:
+            if not context:
+                context = self.get_task_context(task)
+            print(f"Task: {task}\nContext: {context}")
+            return task, context
         confirmed = False
         task, context = "", ""
         while not confirmed:
@@ -467,11 +477,14 @@ class CurriculumAgent:
         else:
             answer = self.run_qa_step2_answer_questions(question=question)
             self.qa_cache[question] = answer
-            self.qa_cache_questions_vectordb.add_texts(
-                texts=[question],
-            )
             U.dump_json(self.qa_cache, f"{self.ckpt_dir}/curriculum/qa_cache.json")
-            self.qa_cache_questions_vectordb.persist()
+            try:
+                self.qa_cache_questions_vectordb.add_texts(
+                    texts=[question],
+                )
+                self.qa_cache_questions_vectordb.persist()
+            except Exception as err:
+                print(f"QA cache embed skipped: {err}")
         context = f"Question: {question}\n{answer}"
         return context
 

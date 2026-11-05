@@ -26,6 +26,10 @@ def _port(name, default):
     return value
 
 
+def _env(name, default=""):
+    return os.environ.get(name, default).strip()
+
+
 def _connection():
     return {
         "mc_port": _port("MC_PORT", "25565"),
@@ -60,6 +64,10 @@ def smoke():
 
 
 def learn():
+    task = _env("TASK")
+    skill_library_dir = _env("SKILL_LIBRARY_DIR") or None
+    reset_mode = _env("RESET_MODE", "soft") or "soft"
+    curriculum_mode = _env("CURRICULUM_AGENT_MODE", "auto") or "auto"
     agent = Voyager(
         **_connection(),
         ollama_base_url=os.environ.get("OLLAMA_BASE_URL", DEFAULT_BASE_URL),
@@ -69,8 +77,10 @@ def learn():
         llm_num_ctx=int(os.environ.get("LLM_NUM_CTX", str(DEFAULT_NUM_CTX))),
         llm_request_timeout=int(os.environ.get("LLM_REQUEST_TIMEOUT", "240")),
         ckpt_dir=os.environ.get("CKPT_DIR", "ckpt"),
+        skill_library_dir=skill_library_dir,
         resume=_flag("RESUME"),
         env_wait_ticks=int(os.environ.get("ENV_WAIT_TICKS", "20")),
+        curriculum_agent_mode=curriculum_mode,
         action_agent_model_name=os.environ.get(
             "ACTION_AGENT_MODEL", DEFAULT_CHAT_MODEL
         ),
@@ -88,7 +98,18 @@ def learn():
         ),
     )
     try:
-        agent.learn()
+        if task:
+            print(f"Voyager manual task: {task}")
+            if not agent.last_events:
+                agent.last_events = agent.env.reset(
+                    options={
+                        "mode": reset_mode,
+                        "wait_ticks": agent.env_wait_ticks,
+                    }
+                )
+            agent.inference(task=task, reset_mode=reset_mode)
+        else:
+            agent.learn()
     finally:
         agent.close()
 
