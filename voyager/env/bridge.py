@@ -24,6 +24,9 @@ class VoyagerEnv(gym.Env):
         server_port=3000,
         request_timeout=600,
         log_path="./logs",
+        mc_host="localhost",
+        mc_username="bot",
+        mc_version="1.21.1",
     ):
         if not mc_port and not azure_login:
             raise ValueError("Either mc_port or azure_login must be specified")
@@ -32,6 +35,9 @@ class VoyagerEnv(gym.Env):
                 "Both mc_port and mc_login are specified, mc_port will be ignored"
             )
         self.mc_port = mc_port
+        self.mc_host = mc_host
+        self.mc_username = mc_username
+        self.mc_version = mc_version
         self.azure_login = azure_login
         self.server = f"{server_host}:{server_port}"
         self.server_port = server_port
@@ -81,26 +87,30 @@ class VoyagerEnv(gym.Env):
             self.reset_options["port"] = self.mc_instance.port
             print(f"Server started on port {self.reset_options['port']}")
         retry = 0
+        started = False
         while not self.mineflayer.is_running:
             print("Mineflayer process has exited, restarting")
             self.mineflayer.run()
-            if not self.mineflayer.is_running:
-                if retry > 3:
-                    raise RuntimeError("Mineflayer process failed to start")
-                else:
-                    continue
-            print(self.mineflayer.ready_line)
-            res = requests.post(
-                f"{self.server}/start",
-                json=self.reset_options,
-                timeout=self.request_timeout,
+            if self.mineflayer.is_running:
+                started = True
+                break
+            retry += 1
+            if retry > 3:
+                raise RuntimeError("Mineflayer process failed to start")
+        if not started:
+            return None
+        print(self.mineflayer.ready_line)
+        res = requests.post(
+            f"{self.server}/start",
+            json=self.reset_options,
+            timeout=self.request_timeout,
+        )
+        if res.status_code != 200:
+            self.mineflayer.stop()
+            raise RuntimeError(
+                f"Minecraft server reply with code {res.status_code}"
             )
-            if res.status_code != 200:
-                self.mineflayer.stop()
-                raise RuntimeError(
-                    f"Minecraft server reply with code {res.status_code}"
-                )
-            return res.json()
+        return res.json()
 
     def step(
         self,
@@ -140,7 +150,10 @@ class VoyagerEnv(gym.Env):
             raise RuntimeError("inventory can only be set when options is hard")
 
         self.reset_options = {
+            "host": self.mc_host,
             "port": self.mc_port,
+            "username": self.mc_username,
+            "version": self.mc_version,
             "reset": options.get("mode", "hard"),
             "inventory": options.get("inventory", {}),
             "equipment": options.get("equipment", []),
@@ -148,6 +161,9 @@ class VoyagerEnv(gym.Env):
             "waitTicks": options.get("wait_ticks", 5),
             "position": options.get("position", None),
         }
+        channels_file = os.environ.get("MC_CHANNELS_FILE")
+        if channels_file:
+            self.reset_options["channelsFile"] = channels_file
 
         self.unpause()
         self.mineflayer.stop()
