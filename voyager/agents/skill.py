@@ -1,33 +1,46 @@
 import os
 
 import voyager.utils as U
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.vectorstores import Chroma
 
 from voyager.prompts import load_prompt
 from voyager.control_primitives import load_control_primitives
+from voyager.llm import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_NUM_CTX,
+    build_chat_model,
+    build_embeddings,
+    prepare_vectordb_dir,
+    read_embedding_model,
+    write_embedding_model,
+)
 
 
 class SkillManager:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name=DEFAULT_CHAT_MODEL,
         temperature=0,
         retrieval_top_k=5,
         request_timout=120,
         ckpt_dir="ckpt",
         resume=False,
+        base_url=DEFAULT_BASE_URL,
+        num_ctx=DEFAULT_NUM_CTX,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
     ):
-        self.llm = ChatOpenAI(
+        self.llm = build_chat_model(
             model_name=model_name,
             temperature=temperature,
             request_timeout=request_timout,
+            base_url=base_url,
+            num_ctx=num_ctx,
         )
         U.f_mkdir(f"{ckpt_dir}/skill/code")
         U.f_mkdir(f"{ckpt_dir}/skill/description")
-        U.f_mkdir(f"{ckpt_dir}/skill/vectordb")
         # programs for env execution
         self.control_primitives = load_control_primitives()
         if resume:
@@ -37,17 +50,46 @@ class SkillManager:
             self.skills = {}
         self.retrieval_top_k = retrieval_top_k
         self.ckpt_dir = ckpt_dir
+        self.embedding_model_name = embedding_model_name
+        vectordb_dir = f"{ckpt_dir}/skill/vectordb"
+        marker_path = f"{ckpt_dir}/skill/embedding.json"
+        rebuild = prepare_vectordb_dir(
+            vectordb_dir, marker_path, embedding_model_name
+        )
         self.vectordb = Chroma(
             collection_name="skill_vectordb",
-            embedding_function=OpenAIEmbeddings(),
-            persist_directory=f"{ckpt_dir}/skill/vectordb",
+            embedding_function=build_embeddings(
+                model_name=embedding_model_name,
+                base_url=base_url,
+                request_timeout=request_timout,
+            ),
+            persist_directory=vectordb_dir,
         )
+        if rebuild or (self.skills and self.vectordb._collection.count() == 0):
+            self._reembed_skills()
+        if read_embedding_model(marker_path) != embedding_model_name:
+            write_embedding_model(marker_path, embedding_model_name)
         assert self.vectordb._collection.count() == len(self.skills), (
             f"Skill Manager's vectordb is not synced with skills.json.\n"
             f"There are {self.vectordb._collection.count()} skills in vectordb but {len(self.skills)} skills in skills.json.\n"
             f"Did you set resume=False when initializing the manager?\n"
-            f"You may need to manually delete the vectordb directory for running from scratch."
+            f"You may need to manually delete the vectordb directory and embedding.json for running from scratch."
         )
+
+    def _reembed_skills(self):
+        if not self.skills:
+            return
+        print(
+            f"\033[33mRebuilding skill vectordb with {self.embedding_model_name} "
+            f"for {len(self.skills)} skills\033[0m"
+        )
+        names = list(self.skills.keys())
+        self.vectordb.add_texts(
+            texts=[self.skills[name]["description"] for name in names],
+            ids=names,
+            metadatas=[{"name": name} for name in names],
+        )
+        self.vectordb.persist()
 
     @property
     def programs(self):
