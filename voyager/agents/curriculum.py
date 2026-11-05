@@ -6,18 +6,28 @@ import re
 import voyager.utils as U
 from voyager.prompts import load_prompt
 from voyager.utils.json_utils import fix_and_parse_json
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.vectorstores import Chroma
+
+from voyager.llm import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_NUM_CTX,
+    build_chat_model,
+    build_embeddings,
+    prepare_vectordb_dir,
+    read_embedding_model,
+    write_embedding_model,
+)
 
 
 class CurriculumAgent:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name=DEFAULT_CHAT_MODEL,
         temperature=0,
-        qa_model_name="gpt-3.5-turbo",
+        qa_model_name=DEFAULT_CHAT_MODEL,
         qa_temperature=0,
         request_timout=120,
         ckpt_dir="ckpt",
@@ -25,24 +35,31 @@ class CurriculumAgent:
         mode="auto",
         warm_up=None,
         core_inventory_items: str | None = None,
+        base_url=DEFAULT_BASE_URL,
+        num_ctx=DEFAULT_NUM_CTX,
+        embedding_model_name=DEFAULT_EMBEDDING_MODEL,
     ):
-        self.llm = ChatOpenAI(
+        self.llm = build_chat_model(
             model_name=model_name,
             temperature=temperature,
             request_timeout=request_timout,
+            base_url=base_url,
+            num_ctx=num_ctx,
         )
-        self.qa_llm = ChatOpenAI(
+        self.qa_llm = build_chat_model(
             model_name=qa_model_name,
             temperature=qa_temperature,
             request_timeout=request_timout,
+            base_url=base_url,
+            num_ctx=num_ctx,
         )
+        self.embedding_model_name = embedding_model_name
         assert mode in [
             "auto",
             "manual",
         ], f"mode {mode} not supported"
         self.mode = mode
         self.ckpt_dir = ckpt_dir
-        U.f_mkdir(f"{ckpt_dir}/curriculum/vectordb")
         if resume:
             print(f"\033[35mLoading Curriculum Agent from {ckpt_dir}/curriculum\033[0m")
             self.completed_tasks = U.load_json(
@@ -55,11 +72,26 @@ class CurriculumAgent:
             self.failed_tasks = []
             self.qa_cache = {}
         # vectordb for qa cache
+        vectordb_dir = f"{ckpt_dir}/curriculum/vectordb"
+        marker_path = f"{ckpt_dir}/curriculum/embedding.json"
+        rebuild = prepare_vectordb_dir(
+            vectordb_dir, marker_path, embedding_model_name
+        )
         self.qa_cache_questions_vectordb = Chroma(
             collection_name="qa_cache_questions_vectordb",
-            embedding_function=OpenAIEmbeddings(),
-            persist_directory=f"{ckpt_dir}/curriculum/vectordb",
+            embedding_function=build_embeddings(
+                model_name=embedding_model_name,
+                base_url=base_url,
+                request_timeout=request_timout,
+            ),
+            persist_directory=vectordb_dir,
         )
+        if rebuild or (
+            self.qa_cache and self.qa_cache_questions_vectordb._collection.count() == 0
+        ):
+            self._reembed_qa_cache()
+        if read_embedding_model(marker_path) != embedding_model_name:
+            write_embedding_model(marker_path, embedding_model_name)
         assert self.qa_cache_questions_vectordb._collection.count() == len(
             self.qa_cache
         ), (
@@ -67,7 +99,7 @@ class CurriculumAgent:
             f"There are {self.qa_cache_questions_vectordb._collection.count()} questions in vectordb "
             f"but {len(self.qa_cache)} questions in qa_cache.json.\n"
             f"Did you set resume=False when initializing the agent?\n"
-            f"You may need to manually delete the qa cache question vectordb directory for running from scratch.\n"
+            f"You may need to manually delete the qa cache question vectordb directory and embedding.json for running from scratch.\n"
         )
         # if warm up not defined, initialize it as a dict, else, initialize all the missing value as a default value
         if not warm_up:
@@ -87,6 +119,16 @@ class CurriculumAgent:
         self.warm_up["inventory"] = 0
         self.warm_up["completed_tasks"] = 0
         self.warm_up["failed_tasks"] = 0
+
+    def _reembed_qa_cache(self):
+        if not self.qa_cache:
+            return
+        print(
+            f"\033[35mRebuilding curriculum question cache with {self.embedding_model_name} "
+            f"for {len(self.qa_cache)} questions\033[0m"
+        )
+        self.qa_cache_questions_vectordb.add_texts(texts=list(self.qa_cache.keys()))
+        self.qa_cache_questions_vectordb.persist()
 
     @property
     def default_warmup(self):
