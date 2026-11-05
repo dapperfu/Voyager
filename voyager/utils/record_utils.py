@@ -30,7 +30,9 @@ class EventRecorder:
             "_%Y%m%d_%H%M%S", time.localtime()
         )
         self.iteration += 1
-        if not self.init_position:
+        # A rejected action has no observation yet. Indexing events[0] aborted
+        # the task before the agent could try again.
+        if not self.init_position and events:
             self.init_position = [
                 events[0][1]["status"]["position"]["x"],
                 events[0][1]["status"]["position"]["z"],
@@ -63,7 +65,7 @@ class EventRecorder:
             if cutoff and self.iteration > cutoff:
                 break
             events = load_json(f_join(self.ckpt_dir, "events", record))
-            if not self.init_position:
+            if not self.init_position and events:
                 self.init_position = (
                     events[0][1]["status"]["position"]["x"],
                     events[0][1]["status"]["position"]["z"],
