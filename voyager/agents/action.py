@@ -3,24 +3,31 @@ import time
 
 import voyager.utils as U
 from javascript import require
-from langchain.chat_models import ChatOpenAI
 from langchain.prompts import SystemMessagePromptTemplate
 from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
 from voyager.prompts import load_prompt
 from voyager.control_primitives_context import load_control_primitives_context
+from voyager.llm import (
+    DEFAULT_BASE_URL,
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_NUM_CTX,
+    build_chat_model,
+)
 
 
 class ActionAgent:
     def __init__(
         self,
-        model_name="gpt-3.5-turbo",
+        model_name=DEFAULT_CHAT_MODEL,
         temperature=0,
         request_timout=120,
         ckpt_dir="ckpt",
         resume=False,
         chat_log=True,
         execution_error=True,
+        base_url=DEFAULT_BASE_URL,
+        num_ctx=DEFAULT_NUM_CTX,
     ):
         self.ckpt_dir = ckpt_dir
         self.chat_log = chat_log
@@ -31,10 +38,12 @@ class ActionAgent:
             self.chest_memory = U.load_json(f"{ckpt_dir}/action/chest_memory.json")
         else:
             self.chest_memory = {}
-        self.llm = ChatOpenAI(
+        self.llm = build_chat_model(
             model_name=model_name,
             temperature=temperature,
             request_timeout=request_timout,
+            base_url=base_url,
+            num_ctx=num_ctx,
         )
 
     def update_chest_memory(self, chests):
