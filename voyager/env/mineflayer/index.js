@@ -2,6 +2,14 @@ const fs = require("fs");
 const express = require("express");
 const bodyParser = require("body-parser");
 const mineflayer = require("mineflayer");
+const { forVersion, loadChannels } = require("./protocol");
+
+function setting(value, fallback) {
+    if (value === undefined || value === null) return fallback;
+    const text = String(value).trim();
+    if (text === "") return fallback;
+    return text;
+}
 
 const skills = require("./lib/skillLoader");
 const { initCounter, getNextTime } = require("./lib/utils");
@@ -26,13 +34,59 @@ app.post("/start", (req, res) => {
     if (bot) onDisconnect("Restarting bot");
     bot = null;
     console.log(req.body);
-    bot = mineflayer.createBot({
-        host: "localhost", // minecraft server ip
-        port: req.body.port, // minecraft server port
-        username: "bot",
-        disableChatSigning: true,
-        checkTimeoutInterval: 60 * 60 * 1000,
-    });
+
+    const version = setting(req.body.version, process.env.MC_VERSION || "1.21.1");
+    const host = setting(req.body.host, process.env.MC_HOST || "localhost");
+    const port = Number(setting(req.body.port, process.env.MC_PORT || "25565"));
+    const username = setting(req.body.username, process.env.MC_USERNAME || "bot");
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        res.status(400).json({
+            error: `Minecraft port must be a TCP port, got ${JSON.stringify(req.body.port)}`,
+        });
+        return;
+    }
+
+    let adapter;
+    try {
+        adapter = forVersion(version);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+        return;
+    }
+
+    let channels;
+    try {
+        const channelsFile = setting(
+            req.body.channelsFile,
+            process.env.MC_CHANNELS_FILE || ""
+        );
+        channels = loadChannels(version, channelsFile || undefined);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+        return;
+    }
+
+    bot = mineflayer.createBot(
+        adapter.botOptions({
+            host,
+            port,
+            username,
+            auth: setting(req.body.auth, process.env.MC_AUTH || "offline"),
+        })
+    );
+    bot.protocol = adapter;
+    try {
+        adapter.install(bot, {
+            channels,
+            skipRecipes: channels.length > 0,
+        });
+    } catch (err) {
+        console.log(err);
+        bot.end();
+        bot = null;
+        res.status(400).json({ error: err.message });
+        return;
+    }
     bot.once("error", onConnectionFailed);
 
     // Event subscriptions
@@ -99,7 +153,9 @@ app.post("/start", (req, res) => {
         const tool = require("mineflayer-tool").plugin;
         const collectBlock = require("mineflayer-collectblock").plugin;
         const pvp = require("mineflayer-pvp").plugin;
-        const minecraftHawkEye = require("minecrafthawkeye");
+        const hawkEyeModule = require("minecrafthawkeye");
+        const minecraftHawkEye =
+            typeof hawkEyeModule === "function" ? hawkEyeModule : hawkEyeModule.default;
         bot.loadPlugin(pathfinder);
         bot.loadPlugin(tool);
         bot.loadPlugin(collectBlock);
@@ -165,15 +221,7 @@ app.post("/step", async (req, res) => {
 
     process.on("uncaughtException", otherError);
 
-    const mcData = require("minecraft-data")(bot.version);
-    mcData.itemsByName["leather_cap"] = mcData.itemsByName["leather_helmet"];
-    mcData.itemsByName["leather_tunic"] =
-        mcData.itemsByName["leather_chestplate"];
-    mcData.itemsByName["leather_pants"] =
-        mcData.itemsByName["leather_leggings"];
-    mcData.itemsByName["leather_boots"] = mcData.itemsByName["leather_boots"];
-    mcData.itemsByName["lapis_lazuli_ore"] = mcData.itemsByName["lapis_ore"];
-    mcData.blocksByName["lapis_lazuli_ore"] = mcData.blocksByName["lapis_ore"];
+    const mcData = bot.protocol.dataPatches(require("minecraft-data")(bot.version));
     const {
         Movements,
         goals: {
@@ -410,7 +458,13 @@ app.post("/pause", (req, res) => {
         res.status(400).json({ error: "Bot not spawned" });
         return;
     }
-    bot.chat("/pause");
+    const freezing = !bot.serverFrozen;
+    bot.chat(freezing ? bot.protocol.commands.freeze : bot.protocol.commands.unfreeze);
+    bot.serverFrozen = freezing;
+    if (freezing) {
+        res.json({ message: "Success" });
+        return;
+    }
     bot.waitForTicks(bot.waitTicks).then(() => {
         res.json({ message: "Success" });
     });
@@ -420,6 +474,7 @@ app.post("/pause", (req, res) => {
 
 const DEFAULT_PORT = 3000;
 const PORT = process.argv[2] || DEFAULT_PORT;
-app.listen(PORT, () => {
+const HOST = process.env.BIND_HOST || "127.0.0.1";
+app.listen(PORT, HOST, () => {
     console.log(`Server started on port ${PORT}`);
 });
